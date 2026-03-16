@@ -1,5 +1,34 @@
 /// <reference path="./wasm.d.ts" />
-import "./.generated/wasm_exec.js";
+
+let wasmRuntimeLoaded: Promise<void> | null = null;
+
+const loadWasmRuntime = () => {
+  if (typeof window === "undefined") {
+    // Skip on server / build-time environments.
+    return Promise.resolve();
+  }
+
+  if (!wasmRuntimeLoaded) {
+    wasmRuntimeLoaded = new Promise<void>((resolve, reject) => {
+      if (typeof (globalThis as any).Go === "function") {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = "/wasm_exec.js";
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () =>
+        reject(new Error("Failed to load /wasm_exec.js for Go WASM runtime."));
+      document.head.appendChild(script);
+    });
+  }
+
+  return wasmRuntimeLoaded;
+};
+
+await loadWasmRuntime();
 
 const go = new Go();
 const wasmResponse = await fetch("/color.wasm");
