@@ -133,7 +133,6 @@ function App() {
           <MouseParallaxImageStack className="max-w-[960px]">
             <ToneOnlyImage
               imageUrl={matterhornSnowySunrise}
-              tone="light"
               width={1920 / 2}
               height={1080 / 2}
               className="h-auto w-full object-cover"

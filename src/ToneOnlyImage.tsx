@@ -1,9 +1,8 @@
-import { converter, parse, rgb, type Color, type Hsl } from "culori";
+import { converter, parse } from "culori";
 import { useRef, useEffect } from "react";
 
 interface ToneOnlyImageProps {
   imageUrl: string;
-  tone: string;
   width: number;
   height: number;
   className?: string;
@@ -11,7 +10,6 @@ interface ToneOnlyImageProps {
 
 export const ToneOnlyImage: React.FC<ToneOnlyImageProps> = ({
   imageUrl,
-  tone,
   width,
   height,
   className,
@@ -35,11 +33,15 @@ export const ToneOnlyImage: React.FC<ToneOnlyImageProps> = ({
       const toRgb = converter("rgb");
       for (let i = 0; i < imageData.data.length; i += 4) {
         const parsedColor = parse(
-          `rgba(${imageData.data[i]}, ${imageData.data[i + 1]}, ${imageData.data[i + 2]}, ${imageData.data[i + 3]})`,
+          `rgba(${imageData.data[i]}, ${imageData.data[i + 1]}, ${
+            imageData.data[i + 2]
+          }, ${imageData.data[i + 3]})`
         );
         if (!parsedColor) {
           console.error(
-            `Failed to parse pixel color: ${imageData.data[i]}, ${imageData.data[i + 1]}, ${imageData.data[i + 2]}, ${imageData.data[i + 3]}`,
+            `Failed to parse pixel color: ${imageData.data[i]}, ${
+              imageData.data[i + 1]
+            }, ${imageData.data[i + 2]}, ${imageData.data[i + 3]}`
           );
           continue;
         }
