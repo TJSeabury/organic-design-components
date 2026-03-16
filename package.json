@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:wasm": "cd wasm/color && GOOS=js GOARCH=wasm go build -o color.wasm . && cp color.wasm ../../public/color.wasm",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -1,5 +1,7 @@
 import { parse, formatHex, converter, type Color, rgb, type Hsl, type Lab } from 'culori'
 
+const toLab = converter('lab')
+const toRgb = converter('rgb')
 const toHsl = converter('hsl')
 
 /**
@@ -62,40 +64,38 @@ export const ApplyLuminanceBasedColorGrading = (
     highlightBlendMode = 'screen',
   } = options
 
-  const toLab = converter('lab')
-  const toRgb = converter('rgb')
-  const toHsl = converter('hsl')
+
 
   // Parse and convert tint colors
   const shadowParsed = typeof shadowColor === 'string' ? parse(shadowColor) : shadowColor
   const highlightParsed = typeof highlightColor === 'string' ? parse(highlightColor) : highlightColor
 
-  if (!shadowParsed || !highlightParsed) return imageData
+  if (!shadowParsed || !highlightParsed) throw new Error("Invalid shadow or highlight color");
 
   const shadowRgb = toRgb(shadowParsed)
   const highlightRgb = toRgb(highlightParsed)
   const shadowHsl = toHsl(shadowParsed)
   const highlightHsl = toHsl(highlightParsed)
 
+
   if (!shadowRgb || !highlightRgb || typeof shadowRgb !== 'object' || typeof highlightRgb !== 'object') {
-    return imageData
+    throw new Error("Invalid shadow or highlight color");
   }
 
-  const data = imageData.data
-
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i] / 255
-    const g = data[i + 1] / 255
-    const b = data[i + 2] / 255
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    const r = imageData.data[i] / 255
+    const g = imageData.data[i + 1] / 255
+    const b = imageData.data[i + 2] / 255
 
     // Convert pixel to LAB to get luminance
-    const pixelColor = parse(`rgb(${data[i]}, ${data[i + 1]}, ${data[i + 2]})`)
-    if (!pixelColor) continue
+    const pixelColor = parse(`rgb(${imageData.data[i]}, ${imageData.data[i + 1]}, ${imageData.data[i + 2]})`)
+    if (!pixelColor) throw new Error("Failed to parse pixel color");
 
     const lab = toLab(pixelColor)
-    if (!lab || typeof lab !== 'object') continue
+    if (!lab || typeof lab !== 'object') throw new Error("Failed to convert pixel color to LAB");
 
     const luminance = lab.l / 100 // Normalize to 0-1
+
 
     let finalR = r
     let finalG = g
@@ -131,6 +131,12 @@ export const ApplyLuminanceBasedColorGrading = (
           }
         }
       }
+      // Strong direct tint mix so shadow color is clearly visible
+      const sr = shadowRgb.r ?? 0, sg = shadowRgb.g ?? 0, sb = shadowRgb.b ?? 0
+      const tintMix = 0.5 * blendAmount
+      finalR = finalR * (1 - tintMix) + sr * tintMix
+      finalG = finalG * (1 - tintMix) + sg * tintMix
+      finalB = finalB * (1 - tintMix) + sb * tintMix
     } else if (luminance > highlightThreshold) {
       // Highlight region: apply highlight color tint
       const weight = smoothstep(highlightThreshold, 1, luminance)
@@ -161,16 +167,71 @@ export const ApplyLuminanceBasedColorGrading = (
           }
         }
       }
+      // Strong direct tint mix so highlight color is clearly visible
+      const hr = highlightRgb.r ?? 0, hg = highlightRgb.g ?? 0, hb = highlightRgb.b ?? 0
+      const tintMix = 0.5 * blendAmount
+      finalR = finalR * (1 - tintMix) + hr * tintMix
+      finalG = finalG * (1 - tintMix) + hg * tintMix
+      finalB = finalB * (1 - tintMix) + hb * tintMix
     }
     // Midtones: no change (between shadowThreshold and highlightThreshold)
 
     // Clamp and write back
-    data[i] = Math.max(0, Math.min(255, Math.round(finalR * 255)))
-    data[i + 1] = Math.max(0, Math.min(255, Math.round(finalG * 255)))
-    data[i + 2] = Math.max(0, Math.min(255, Math.round(finalB * 255)))
+    imageData.data[i] = Math.max(0, Math.min(255, Math.round(finalR * 255)))
+    imageData.data[i + 1] = Math.max(0, Math.min(255, Math.round(finalG * 255)))
+    imageData.data[i + 2] = Math.max(0, Math.min(255, Math.round(finalB * 255)))
   }
 
   return imageData
+}
+
+export const DefaultLuminanceBasedGradingOptions: LuminanceBasedGradingOptions = {
+  shadowColor: "#4b6b4b", // green
+  highlightColor: "#6b4b6b", // purple
+  shadowThreshold: 0.3,
+  highlightThreshold: 0.7,
+  shadowStrength: 0.3,
+  highlightStrength: 0.2,
+}
+
+/** Returns a data URL of the graded image so it can be used directly as img src. */
+export const GradedImageFromImageData = (
+  imageData: ImageData,
+  options: LuminanceBasedGradingOptions = DefaultLuminanceBasedGradingOptions
+): string => {
+  const toRgb = converter('rgb')
+
+  const shadowParsed = typeof options.shadowColor === 'string' ? parse(options.shadowColor) : options.shadowColor
+  const highlightParsed = typeof options.highlightColor === 'string' ? parse(options.highlightColor) : options.highlightColor
+
+  if (!shadowParsed || !highlightParsed) throw new Error("Invalid shadow or highlight color");
+
+  const shadowRgb = toRgb(shadowParsed)
+  const highlightRgb = toRgb(highlightParsed)
+
+  if (!shadowRgb || !highlightRgb || typeof shadowRgb !== 'object' || typeof highlightRgb !== 'object') {
+    throw new Error("Invalid shadow or highlight color");
+  }
+
+  // Work on a copy so we don't mutate the caller's imageData (e.g. React state)
+  const imageDataCopy = new ImageData(
+    new Uint8ClampedArray(imageData.data),
+    imageData.width,
+    imageData.height
+  )
+  const graded = ApplyLuminanceBasedColorGrading(imageDataCopy, {
+    ...options,
+    shadowColor: shadowRgb,
+    highlightColor: highlightRgb,
+  })
+
+  const canvas = document.createElement('canvas')
+  canvas.width = graded.width
+  canvas.height = graded.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error("Failed to get canvas context")
+  ctx.putImageData(graded, 0, 0)
+  return canvas.toDataURL('image/png')
 }
 
 /**
