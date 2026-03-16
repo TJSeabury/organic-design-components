@@ -1,4 +1,3 @@
-import { useState } from "react";
 import reactLogo from "./assets/react.svg";
 import viteLogo from "/vite.svg";
 import "./App.css";
@@ -10,13 +9,12 @@ import { CTASection } from "./CTASection";
 import { ToneOnlyImage } from "./ToneOnlyImage";
 import matterhornSnowySunrise from "./assets/matterhorn_snowy_sunrise.png";
 import mistymorningmeadow from "./assets/morning-misty-meadow.jpg";
-import beachFishing from "./assets/beach-fishing.jpg";
-import mountainsandforest from "./assets/mountains-and-forest.jpg";
 import rockyoceanshore from "./assets/rocky-ocean-shore.jpg";
+import { ColorGradedImage } from "./ColorGradedImage";
+import { MouseParallaxSection } from "./MouseParallaxSection";
+import { MouseParallaxImageStack } from "./MouseParallaxImageStack";
 
 function App() {
-  const [count, setCount] = useState(0);
-
   return (
     <>
       <span className="block pt-32"></span>
@@ -91,169 +89,56 @@ function App() {
           </button>
         </CTASection>
 
-        <section className="w-full max-w-[100vw] flex items-center justify-center">
-          <img
-            src={matterhornSnowySunrise}
-            alt="Matterhorn Snowy Sunrise"
-            width={1920 / 2}
-            height={1080 / 2}
-            className="h-auto"
-          />
-          <ToneOnlyImage
-            imageUrl={matterhornSnowySunrise}
-            tone="light"
-            width={1920 / 2}
-            height={1080 / 2}
-            className="h-auto"
-          />
-        </section>
-      </div>
-
-      <div>
-        <CTASection
-          backgroundImage={mistymorningmeadow}
-          backgroundColor="#242424"
-          overlayColor="#FED9C7"
-          overlayOpacity={0.76}
-          textColor="#222"
-        >
-          <h1 className="text-3xl font-bold text-[#222] mb-4">
-            Please notice me!
-          </h1>
-          <p className="text-[#222] mb-4">
-            We really really need you to click this button. Please click it.
-          </p>
-          <button className="bg-[#677B96] text-white px-4 py-2 rounded-md">
-            Click me
-          </button>
-        </CTASection>
-
-        <section className="w-full max-w-[100vw] flex items-center justify-center">
-          <img
-            src={mistymorningmeadow}
-            alt="Matterhorn Snowy Sunrise"
-            width={1920 / 2}
-            height={1080 / 2}
-            className="h-auto"
-          />
-          <ToneOnlyImage
-            imageUrl={mistymorningmeadow}
-            tone="light"
-            width={1920 / 2}
-            height={1080 / 2}
-            className="h-auto"
-          />
-        </section>
-      </div>
-
-      <div>
-        <CTASection
-          backgroundImage={beachFishing}
-          backgroundColor="#242424"
-          overlayColor="#FED9C7"
-          overlayOpacity={0.76}
-          textColor="#222"
-        >
-          <h1 className="text-3xl font-bold text-[#222] mb-4">
-            Please notice me!
-          </h1>
-          <p className="text-[#222] mb-4">
-            We really really need you to click this button. Please click it.
-          </p>
-          <button className="bg-[#677B96] text-white px-4 py-2 rounded-md">
-            Click me
-          </button>
-        </CTASection>
-
-        <section className="w-full max-w-[100vw] flex items-center justify-center">
-          <img
-            src={beachFishing}
-            alt="Matterhorn Snowy Sunrise"
-            width={1920 / 2}
-            height={1080 / 2}
-            className="h-auto"
-          />
-          <ToneOnlyImage
-            imageUrl={beachFishing}
-            tone="light"
-            width={1920 / 2}
-            height={1080 / 2}
-            className="h-auto"
-          />
-        </section>
-      </div>
-
-      <div>
-        <CTASection
-          backgroundImage={mountainsandforest}
-          backgroundColor="#242424"
-          overlayColor="#FED9C7"
-          overlayOpacity={0.66}
-          textColor="#222"
-        >
-          <h1 className="text-3xl font-bold text-[#222] mb-4">
-            Please notice me!
-          </h1>
-          <p className="text-[#222] mb-4">
-            We really really need you to click this button. Please click it.
-          </p>
-          <button className="bg-[#677B96] text-white px-4 py-2 rounded-md">
-            Click me
-          </button>
-        </CTASection>
-
-        <section className="w-full max-w-[100vw] flex items-center justify-center">
-          <img
-            src={mountainsandforest}
-            alt="Matterhorn Snowy Sunrise"
-            width={1920 / 2}
-            height={1080 / 2}
-            className="h-auto"
-          />
-          <ToneOnlyImage
-            imageUrl={mountainsandforest}
-            tone="light"
-            width={1920 / 2}
-            height={1080 / 2}
-            className="h-auto"
-          />
-        </section>
-      </div>
-
-      <div>
-        <CTASection
-          backgroundImage={rockyoceanshore}
-          backgroundColor="#242424"
-          overlayColor="#FED9C7"
-          overlayOpacity={0.76}
-          textColor="#222"
-        >
-          <h1 className="text-3xl font-bold text-[#222] mb-4">
-            Please notice me!
-          </h1>
-          <p className="text-[#222] mb-4">
-            We really really need you to click this button. Please click it.
-          </p>
-          <button className="bg-[#677B96] text-white px-4 py-2 rounded-md">
-            Click me
-          </button>
-        </CTASection>
+        <MouseParallaxSection backgroundImageUrl={mistymorningmeadow}>
+          <div className="flex flex-col items-center justify-center bg-[#214343cc] p-12 rounded-md shadow-md">
+            <h2 className="text-4xl font-bold mb-4">Subtle Mouse Parallax</h2>
+            <p className="mb-6 text-lg max-w-prose mx-auto">
+              This section fills the viewport and gently shifts the background
+              in response to your cursor, while keeping this content locked to
+              the center.
+            </p>
+            <button className="inline-flex items-center justify-center rounded-full bg-white/90 px-6 py-2 text-sm font-semibold text-slate-900 shadow-lg shadow-black/40 hover:bg-white text-white">
+              Explore the motion
+            </button>
+          </div>
+        </MouseParallaxSection>
 
         <section className="w-full max-w-[100vw] flex items-center justify-center">
           <img
             src={rockyoceanshore}
-            alt="Matterhorn Snowy Sunrise"
+            alt="Rocky Ocean Shore"
             width={1920 / 2}
             height={1080 / 2}
-            className="h-auto"
+            className="h-auto max-w-[1920px]"
           />
-          <ToneOnlyImage
+          <ColorGradedImage
             imageUrl={rockyoceanshore}
-            tone="light"
             width={1920 / 2}
             height={1080 / 2}
-            className="h-auto"
+            className="h-auto max-w-[1920px]"
           />
+        </section>
+
+        <section className="w-full max-w-[100vw] flex items-center justify-center gap-10 py-24">
+          <MouseParallaxImageStack className="max-w-[960px]">
+            <img
+              src={matterhornSnowySunrise}
+              alt="Matterhorn Snowy Sunrise"
+              width={1920 / 2}
+              height={1080 / 2}
+              className="h-auto w-full object-cover"
+            />
+          </MouseParallaxImageStack>
+
+          <MouseParallaxImageStack className="max-w-[960px]">
+            <ToneOnlyImage
+              imageUrl={matterhornSnowySunrise}
+              tone="light"
+              width={1920 / 2}
+              height={1080 / 2}
+              className="h-auto w-full object-cover"
+            />
+          </MouseParallaxImageStack>
         </section>
       </div>
 
