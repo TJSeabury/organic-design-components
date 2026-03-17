@@ -13,10 +13,23 @@ import rockyoceanshore from "./assets/rocky-ocean-shore.jpg";
 import { ColorGradedImage } from "./ColorGradedImage";
 import { MouseParallaxSection } from "./MouseParallaxSection";
 import { MouseParallaxImageStack } from "./MouseParallaxImageStack";
+import { MarchingSquaresExample } from "./MarchingSquaresExample";
 
 function App() {
   return (
     <>
+      <section className="w-full max-w-[960px] mx-auto h-full my-32 flex flex-col items-center justify-center">
+        <h1 className="text-2xl font-bold mb-4 text-center">
+          Fast liquid simulation with LERPed Marching Squares rendering.
+        </h1>
+        <p className="text-center mb-4">
+          This demo shows how to implement a fast liquid simulation with LERPed
+          Marching Squares rendering. It can be used as a base for interactable
+          components. Try clicking and dragging the liquid to see the effect.
+        </p>
+        <MarchingSquaresExample />
+      </section>
+
       <span className="block pt-32"></span>
       <RadialLayout
         elements={[
@@ -71,6 +84,17 @@ function App() {
       </RadialLayout>
 
       <div>
+        <section className="w-full max-w-[960px] mx-auto h-full my-24 flex flex-col items-center justify-center">
+          <h2 className="text-2xl font-bold mb-4 text-center">
+            Call-to-action section with image-aware color blocking.
+          </h2>
+          <p className="text-center mb-4 max-w-prose">
+            This hero-style CTA blends a photographic background with an
+            overlaid color block, demonstrating how layout and color can be
+            combined to keep text readable while still feeling immersive.
+          </p>
+        </section>
+
         <CTASection
           backgroundImage={matterhornSnowySunrise}
           backgroundColor="#242424"
@@ -89,6 +113,17 @@ function App() {
           </button>
         </CTASection>
 
+        <section className="w-full max-w-[960px] mx-auto h-full my-24 flex flex-col items-center justify-center">
+          <h2 className="text-2xl font-bold mb-4 text-center">
+            Full-viewport mouse parallax background.
+          </h2>
+          <p className="text-center mb-4 max-w-prose">
+            This section shows how to wire up a cursor-driven parallax effect
+            that keeps content locked to the center while the background drifts
+            subtly underneath.
+          </p>
+        </section>
+
         <MouseParallaxSection backgroundImageUrl={mistymorningmeadow}>
           <div className="flex flex-col items-center justify-center bg-[#214343cc] p-12 rounded-md shadow-md">
             <h2 className="text-4xl font-bold mb-4">Subtle Mouse Parallax</h2>
@@ -102,6 +137,18 @@ function App() {
             </button>
           </div>
         </MouseParallaxSection>
+
+        <section className="w-full max-w-[960px] mx-auto h-full my-24 flex flex-col items-center justify-center">
+          <h2 className="text-2xl font-bold mb-4 text-center">
+            Automated color grading with WebAssembly-accelerated image
+            processing.
+          </h2>
+          <p className="text-center mb-4 max-w-prose">
+            This automated color-grading example demonstrates that techniques
+            once limited to native tools like Photoshop can now run entirely in
+            the browser by offloading CPU-intensive work to WebAssembly.
+          </p>
+        </section>
 
         <section className="w-full max-w-[100vw] flex items-center justify-center">
           <img
@@ -117,6 +164,17 @@ function App() {
             height={1080 / 2}
             className="h-auto max-w-[1920px]"
           />
+        </section>
+
+        <section className="w-full max-w-[960px] mx-auto h-full my-24 flex flex-col items-center justify-center">
+          <h2 className="text-2xl font-bold mb-4 text-center">
+            Layered mouse parallax for image stacks.
+          </h2>
+          <p className="text-center mb-4 max-w-prose">
+            Here, multiple translucent color plates and the foreground image all
+            move at different speeds in response to the cursor, creating a
+            depthy, tactile feel suitable for hero imagery or product shots.
+          </p>
         </section>
 
         <section className="w-full max-w-[100vw] flex items-center justify-center gap-10 py-24">
