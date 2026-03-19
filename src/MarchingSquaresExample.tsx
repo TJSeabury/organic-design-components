@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 /** Basic width/height dimensions helper. */
 export interface Dimensions<T> {
@@ -226,17 +226,31 @@ type Particle = {
 
 const size = 64;
 
-const particleCount = 200;
-const cohesionRadiusPx = 80;
-const repulsionRadiusPx = 60;
-const restDistancePx = 80;
-const cohesionStrength = 0.9;
-const repulsionStrength = 3;
-const damping = 0.995;
-const maxSpeed = 1200;
+type SimConfig = {
+  particleCount: number;
+  cohesionRadiusPx: number;
+  repulsionRadiusPx: number;
+  restDistancePx: number;
+  cohesionStrength: number;
+  repulsionStrength: number;
+  damping: number;
+  maxSpeed: number;
+  debug: boolean;
+  debugParticleRadius: number;
+};
 
-const debug = true;
-const debugParticleRadius = 1;
+const defaultSimConfig: SimConfig = {
+  particleCount: 200,
+  cohesionRadiusPx: 50,
+  repulsionRadiusPx: 40,
+  restDistancePx: 33,
+  cohesionStrength: 0.9,
+  repulsionStrength: 3,
+  damping: 0.997,
+  maxSpeed: 1200,
+  debug: true,
+  debugParticleRadius: 1,
+};
 
 // Metaballs kernel parameters
 const kernelSigmaPx = 28;
@@ -258,6 +272,8 @@ const clamp = (v: number, min: number, max: number) =>
   Math.max(min, Math.min(max, v));
 
 export const MarchingSquaresExample: React.FC = () => {
+  const [simConfig, setSimConfig] = useState<SimConfig>(defaultSimConfig);
+  const simConfigRef = useRef<SimConfig>(defaultSimConfig);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameIdRef = useRef<number | null>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -288,8 +304,7 @@ export const MarchingSquaresExample: React.FC = () => {
     gradient.addColorStop(0, "#1e3a8a"); // blue
     gradient.addColorStop(1, "#22c55e"); // green
 
-    // Initialize particles near the center
-    particlesRef.current = Array.from({ length: particleCount }, () => {
+    const spawnParticle = (): Particle => {
       const a = Math.random() * TAU;
       const r = Math.random() * Math.min(width, height) * 0.08;
       return {
@@ -298,7 +313,13 @@ export const MarchingSquaresExample: React.FC = () => {
         vx: (Math.random() - 0.5) * 40,
         vy: (Math.random() - 0.5) * 40,
       };
-    });
+    };
+
+    // Initialize particles near the center
+    particlesRef.current = Array.from(
+      { length: simConfigRef.current.particleCount },
+      spawnParticle
+    );
 
     let lastNow = performance.now();
     // Separate from `lastNow` (which is used for the simulation dt clamp).
@@ -386,22 +407,33 @@ export const MarchingSquaresExample: React.FC = () => {
 
       const pointer = pointerRef.current;
       const particles = particlesRef.current;
+      const cfg = simConfigRef.current;
+
+      // Apply particle count changes live without remounting.
+      if (particles.length < cfg.particleCount) {
+        const needed = cfg.particleCount - particles.length;
+        for (let i = 0; i < needed; i++) particles.push(spawnParticle());
+      } else if (particles.length > cfg.particleCount) {
+        particles.length = cfg.particleCount;
+      }
 
       // Clear canvas
       ctx.clearRect(0, 0, width, height);
       ctx.strokeStyle = "black";
 
-      // FPS overlay (upper-left)
-      ctx.save();
-      ctx.font =
-        "12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
-      ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
-      ctx.fillRect(6, 6, 160, 52);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-      ctx.fillText(`FPS min ${fpsMin.toFixed(0)}`, 12, 25);
-      ctx.fillText(`avg ${fpsAvg.toFixed(0)}`, 12, 40);
-      ctx.fillText(`max ${fpsMax.toFixed(0)}`, 12, 55);
-      ctx.restore();
+      if (cfg.debug) {
+        // FPS overlay (upper-left)
+        ctx.save();
+        ctx.font =
+          "12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
+        ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+        ctx.fillRect(6, 6, 160, 52);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.fillText(`FPS min ${fpsMin.toFixed(0)}`, 12, 25);
+        ctx.fillText(`avg ${fpsAvg.toFixed(0)}`, 12, 40);
+        ctx.fillText(`max ${fpsMax.toFixed(0)}`, 12, 55);
+        ctx.restore();
+      }
 
       // Pointer velocity estimate (for stirring)
       if (pointer.active && dt > 0) {
@@ -420,8 +452,8 @@ export const MarchingSquaresExample: React.FC = () => {
       }
 
       // Particle simulation: cohesion + repulsion
-      const cohesionR2 = cohesionRadiusPx * cohesionRadiusPx;
-      const repulsionR2 = repulsionRadiusPx * repulsionRadiusPx;
+      const cohesionR2 = cfg.cohesionRadiusPx * cfg.cohesionRadiusPx;
+      const repulsionR2 = cfg.repulsionRadiusPx * cfg.repulsionRadiusPx;
 
       // Pairwise forces
       for (let i = 0; i < particles.length; i++) {
@@ -440,16 +472,16 @@ export const MarchingSquaresExample: React.FC = () => {
 
           // Cohesion (spring towards rest distance) within cohesion radius
           if (d2 < cohesionR2) {
-            const disp = d - restDistancePx;
-            const f = cohesionStrength * disp;
+            const disp = d - cfg.restDistancePx;
+            const f = cfg.cohesionStrength * disp;
             fx += f * dx * invD;
             fy += f * dy * invD;
           }
 
           // Short-range repulsion
           if (d2 < repulsionR2) {
-            const overlap = repulsionRadiusPx - d;
-            const f = repulsionStrength * overlap;
+            const overlap = cfg.repulsionRadiusPx - d;
+            const f = cfg.repulsionStrength * overlap;
             fx -= f * dx * invD;
             fy -= f * dy * invD;
           }
@@ -503,14 +535,14 @@ export const MarchingSquaresExample: React.FC = () => {
         p.vx += (centerStrength * cdx * dt) / width;
         p.vy += (centerStrength * cdy * dt) / height;
 
-        p.vx *= damping;
-        p.vy *= damping;
+        p.vx *= cfg.damping;
+        p.vy *= cfg.damping;
 
         // clamp speed
         const s2 = p.vx * p.vx + p.vy * p.vy;
-        if (s2 > maxSpeed * maxSpeed) {
+        if (s2 > cfg.maxSpeed * cfg.maxSpeed) {
           const s = Math.sqrt(s2);
-          const k = maxSpeed / s;
+          const k = cfg.maxSpeed / s;
           p.vx *= k;
           p.vy *= k;
         }
@@ -656,10 +688,10 @@ export const MarchingSquaresExample: React.FC = () => {
         ctx.fill();
       }
 
-      if (debug === true) {
+      if (cfg.debug === true) {
         for (const p of particles) {
           ctx.beginPath();
-          ctx.arc(p.x, p.y, debugParticleRadius, 0, 2 * Math.PI);
+          ctx.arc(p.x, p.y, cfg.debugParticleRadius, 0, 2 * Math.PI);
           ctx.strokeStyle = "blue";
           ctx.lineWidth = 1;
           ctx.stroke();
@@ -683,12 +715,197 @@ export const MarchingSquaresExample: React.FC = () => {
     };
   }, []);
 
+  const updateConfig = <K extends keyof SimConfig>(
+    key: K,
+    value: SimConfig[K]
+  ) => {
+    setSimConfig((prev) => {
+      const next = { ...prev, [key]: value };
+      simConfigRef.current = next;
+      return next;
+    });
+  };
+
   return (
-    <canvas
-      ref={canvasRef}
-      className="marching-squares-canvas block mx-auto my-4 border border-black"
-      width={800}
-      height={800}
-    />
+    <div className="w-full flex items-start justify-center gap-4 my-4">
+      <canvas
+        ref={canvasRef}
+        className="marching-squares-canvas block border border-black"
+        width={800}
+        height={800}
+      />
+
+      <aside className="w-[280px] shrink-0 rounded-md border border-white/10 bg-white/5 p-3 text-sm">
+        <h3 className="font-semibold mb-3">Simulation Controls</h3>
+        <div className="space-y-3">
+          <label className="block">
+            <div className="flex justify-between">
+              <span>Particles</span>
+              <span>{simConfig.particleCount}</span>
+            </div>
+            <input
+              type="range"
+              min={10}
+              max={400}
+              step={1}
+              value={simConfig.particleCount}
+              onChange={(e) =>
+                updateConfig("particleCount", Number(e.target.value))
+              }
+              className="w-full"
+            />
+          </label>
+
+          <label className="block">
+            <div className="flex justify-between">
+              <span>Cohesion Radius</span>
+              <span>{simConfig.cohesionRadiusPx}</span>
+            </div>
+            <input
+              type="range"
+              min={10}
+              max={200}
+              step={1}
+              value={simConfig.cohesionRadiusPx}
+              onChange={(e) =>
+                updateConfig("cohesionRadiusPx", Number(e.target.value))
+              }
+              className="w-full"
+            />
+          </label>
+
+          <label className="block">
+            <div className="flex justify-between">
+              <span>Repulsion Radius</span>
+              <span>{simConfig.repulsionRadiusPx}</span>
+            </div>
+            <input
+              type="range"
+              min={5}
+              max={150}
+              step={1}
+              value={simConfig.repulsionRadiusPx}
+              onChange={(e) =>
+                updateConfig("repulsionRadiusPx", Number(e.target.value))
+              }
+              className="w-full"
+            />
+          </label>
+
+          <label className="block">
+            <div className="flex justify-between">
+              <span>Rest Distance</span>
+              <span>{simConfig.restDistancePx}</span>
+            </div>
+            <input
+              type="range"
+              min={5}
+              max={160}
+              step={1}
+              value={simConfig.restDistancePx}
+              onChange={(e) =>
+                updateConfig("restDistancePx", Number(e.target.value))
+              }
+              className="w-full"
+            />
+          </label>
+
+          <label className="block">
+            <div className="flex justify-between">
+              <span>Cohesion Strength</span>
+              <span>{simConfig.cohesionStrength.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={3}
+              step={0.01}
+              value={simConfig.cohesionStrength}
+              onChange={(e) =>
+                updateConfig("cohesionStrength", Number(e.target.value))
+              }
+              className="w-full"
+            />
+          </label>
+
+          <label className="block">
+            <div className="flex justify-between">
+              <span>Repulsion Strength</span>
+              <span>{simConfig.repulsionStrength.toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={6}
+              step={0.01}
+              value={simConfig.repulsionStrength}
+              onChange={(e) =>
+                updateConfig("repulsionStrength", Number(e.target.value))
+              }
+              className="w-full"
+            />
+          </label>
+
+          <label className="block">
+            <div className="flex justify-between">
+              <span>Damping</span>
+              <span>{simConfig.damping.toFixed(3)}</span>
+            </div>
+            <input
+              type="range"
+              min={0.8}
+              max={0.999}
+              step={0.001}
+              value={simConfig.damping}
+              onChange={(e) => updateConfig("damping", Number(e.target.value))}
+              className="w-full"
+            />
+          </label>
+
+          <label className="block">
+            <div className="flex justify-between">
+              <span>Max Speed</span>
+              <span>{simConfig.maxSpeed}</span>
+            </div>
+            <input
+              type="range"
+              min={100}
+              max={3000}
+              step={10}
+              value={simConfig.maxSpeed}
+              onChange={(e) => updateConfig("maxSpeed", Number(e.target.value))}
+              className="w-full"
+            />
+          </label>
+
+          <label className="flex items-center justify-between pt-1">
+            <span>Debug Overlay</span>
+            <input
+              type="checkbox"
+              checked={simConfig.debug}
+              onChange={(e) => updateConfig("debug", e.target.checked)}
+            />
+          </label>
+
+          <label className="block">
+            <div className="flex justify-between">
+              <span>Debug Particle Radius</span>
+              <span>{simConfig.debugParticleRadius.toFixed(1)}</span>
+            </div>
+            <input
+              type="range"
+              min={0.5}
+              max={5}
+              step={0.5}
+              value={simConfig.debugParticleRadius}
+              onChange={(e) =>
+                updateConfig("debugParticleRadius", Number(e.target.value))
+              }
+              className="w-full"
+            />
+          </label>
+        </div>
+      </aside>
+    </div>
   );
 };
