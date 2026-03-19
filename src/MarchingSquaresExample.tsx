@@ -119,10 +119,16 @@ const edgeT = (iso: number, v0: number, v1: number) => {
   return clamp01((iso - v0) / denom);
 };
 
-type Point = { x: number; y: number };
-type SegmentPoints = { a: Point; b: Point };
+const pointsNearXY = (
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  eps: number
+) => Math.abs(ax - bx) <= eps && Math.abs(ay - by) <= eps;
 
-const cellSegments = (
+const appendCellSegments = (
+  out: number[],
   iso: number,
   cellSize: CellSize,
   x0: number,
@@ -131,7 +137,7 @@ const cellSegments = (
   vTR: number,
   vBR: number,
   vBL: number
-): SegmentPoints[] => {
+): void => {
   // Compute interpolated intersection points along each edge.
   const x1 = x0 + cellSize.width;
   const y1 = y0 + cellSize.height;
@@ -141,10 +147,14 @@ const cellSegments = (
   const tBottom = edgeT(iso, vBL, vBR);
   const tLeft = edgeT(iso, vTL, vBL);
 
-  const pTop = { x: lerp(x0, x1, tTop), y: y0 };
-  const pRight = { x: x1, y: lerp(y0, y1, tRight) };
-  const pBottom = { x: lerp(x0, x1, tBottom), y: y1 };
-  const pLeft = { x: x0, y: lerp(y0, y1, tLeft) };
+  const pTopX = lerp(x0, x1, tTop);
+  const pTopY = y0;
+  const pRightX = x1;
+  const pRightY = lerp(y0, y1, tRight);
+  const pBottomX = lerp(x0, x1, tBottom);
+  const pBottomY = y1;
+  const pLeftX = x0;
+  const pLeftY = lerp(y0, y1, tLeft);
 
   const mask =
     (vTL >= iso ? 0b0001 : 0) |
@@ -153,27 +163,58 @@ const cellSegments = (
     (vBL >= iso ? 0b1000 : 0);
 
   const segments = caseSegments[mask] ?? [];
-  if (segments.length === 0) return [];
+  if (segments.length === 0) return;
 
-  const pointForEdge = (e: Edge): Point => {
-    switch (e) {
+  for (let i = 0; i < segments.length; i++) {
+    const [e0, e1] = segments[i];
+    let xA = 0;
+    let yA = 0;
+    let xB = 0;
+    let yB = 0;
+
+    switch (e0) {
       case 0:
-        return pTop;
+        xA = pTopX;
+        yA = pTopY;
+        break;
       case 1:
-        return pRight;
+        xA = pRightX;
+        yA = pRightY;
+        break;
       case 2:
-        return pBottom;
+        xA = pBottomX;
+        yA = pBottomY;
+        break;
       case 3:
       default:
-        return pLeft;
+        xA = pLeftX;
+        yA = pLeftY;
+        break;
     }
-  };
 
-  return segments.map(([e0, e1]) => {
-    const p0 = pointForEdge(e0);
-    const p1 = pointForEdge(e1);
-    return { a: p0, b: p1 };
-  });
+    switch (e1) {
+      case 0:
+        xB = pTopX;
+        yB = pTopY;
+        break;
+      case 1:
+        xB = pRightX;
+        yB = pRightY;
+        break;
+      case 2:
+        xB = pBottomX;
+        yB = pBottomY;
+        break;
+      case 3:
+      default:
+        xB = pLeftX;
+        yB = pLeftY;
+        break;
+    }
+
+    // Flat format: [x0, y0, x1, y1]
+    out.push(xA, yA, xB, yB);
+  }
 };
 
 type Particle = {
@@ -183,16 +224,19 @@ type Particle = {
   vy: number;
 };
 
-const size = 100;
+const size = 64;
 
-const particleCount = 50;
+const particleCount = 200;
 const cohesionRadiusPx = 80;
-const repulsionRadiusPx = 18;
-const restDistancePx = 40;
+const repulsionRadiusPx = 60;
+const restDistancePx = 80;
 const cohesionStrength = 0.9;
 const repulsionStrength = 3;
-const damping = 0.985;
+const damping = 0.995;
 const maxSpeed = 1200;
+
+const debug = true;
+const debugParticleRadius = 1;
 
 // Metaballs kernel parameters
 const kernelSigmaPx = 28;
@@ -240,6 +284,9 @@ export const MarchingSquaresExample: React.FC = () => {
 
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("2D canvas context required.");
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, "#1e3a8a"); // blue
+    gradient.addColorStop(1, "#22c55e"); // green
 
     // Initialize particles near the center
     particlesRef.current = Array.from({ length: particleCount }, () => {
@@ -254,8 +301,19 @@ export const MarchingSquaresExample: React.FC = () => {
     });
 
     let lastNow = performance.now();
+    // Separate from `lastNow` (which is used for the simulation dt clamp).
+    // We measure the true rAF interval for FPS reporting.
+    let lastRafNow = lastNow;
+    const fpsWindow = 60;
+    const fpsHistory = new Array<number>(fpsWindow).fill(0);
+    let fpsIndex = 0;
+    let fpsCount = 0;
+    let fpsSum = 0;
     let prevPointerX = pointerRef.current.x;
     let prevPointerY = pointerRef.current.y;
+    const segmentsBuffer: number[] = [];
+    const loopsBuffer: number[][] = [];
+    const segmentUsed: boolean[] = [];
 
     const updatePointerFromEvent = (ev: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
@@ -299,6 +357,30 @@ export const MarchingSquaresExample: React.FC = () => {
     canvas.addEventListener("pointerleave", onPointerLeave);
 
     const frame = (now: number) => {
+      const rafIntervalMs = now - lastRafNow;
+      lastRafNow = now;
+
+      const instFps = rafIntervalMs > 0 ? 1000 / rafIntervalMs : 0;
+      if (fpsCount < fpsWindow) {
+        fpsHistory[fpsIndex] = instFps;
+        fpsSum += instFps;
+        fpsCount++;
+      } else {
+        fpsSum -= fpsHistory[fpsIndex];
+        fpsHistory[fpsIndex] = instFps;
+        fpsSum += instFps;
+      }
+      fpsIndex = (fpsIndex + 1) % fpsWindow;
+
+      let fpsMin = Number.POSITIVE_INFINITY;
+      let fpsMax = 0;
+      for (let i = 0; i < fpsCount; i++) {
+        const v = fpsHistory[i];
+        if (v < fpsMin) fpsMin = v;
+        if (v > fpsMax) fpsMax = v;
+      }
+      const fpsAvg = fpsCount > 0 ? fpsSum / fpsCount : 0;
+
       const dt = clamp((now - lastNow) / 1000, 0, 1 / 15);
       lastNow = now;
 
@@ -308,6 +390,18 @@ export const MarchingSquaresExample: React.FC = () => {
       // Clear canvas
       ctx.clearRect(0, 0, width, height);
       ctx.strokeStyle = "black";
+
+      // FPS overlay (upper-left)
+      ctx.save();
+      ctx.font =
+        "12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace";
+      ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+      ctx.fillRect(6, 6, 160, 52);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.fillText(`FPS min ${fpsMin.toFixed(0)}`, 12, 25);
+      ctx.fillText(`avg ${fpsAvg.toFixed(0)}`, 12, 40);
+      ctx.fillText(`max ${fpsMax.toFixed(0)}`, 12, 55);
+      ctx.restore();
 
       // Pointer velocity estimate (for stirring)
       if (pointer.active && dt > 0) {
@@ -424,7 +518,7 @@ export const MarchingSquaresExample: React.FC = () => {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
 
-        const pad = 6;
+        const pad = 100;
         if (p.x < pad) {
           p.x = pad;
           p.vx = Math.abs(p.vx) * 0.6;
@@ -460,7 +554,7 @@ export const MarchingSquaresExample: React.FC = () => {
       }
 
       // Collect contour segments from marching squares.
-      const segments: SegmentPoints[] = [];
+      segmentsBuffer.length = 0;
       for (let x = 0; x < size - 1; ++x) {
         for (let y = 0; y < size - 1; ++y) {
           const vTL = field.readAt(x, y);
@@ -468,55 +562,61 @@ export const MarchingSquaresExample: React.FC = () => {
           const vBR = field.readAt(x + 1, y + 1);
           const vBL = field.readAt(x, y + 1);
 
-          segments.push(
-            ...cellSegments(
-              iso,
-              cellSize,
-              x * cellWidth,
-              y * cellHeight,
-              vTL,
-              vTR,
-              vBR,
-              vBL
-            )
+          appendCellSegments(
+            segmentsBuffer,
+            iso,
+            cellSize,
+            x * cellWidth,
+            y * cellHeight,
+            vTL,
+            vTR,
+            vBR,
+            vBL
           );
         }
       }
 
       // Reconstruct contour loops from segments.
       const EPS = 1e-3;
-      const keyForPoint = (p: Point) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`;
+      const segmentCount = segmentsBuffer.length >> 2;
+      segmentUsed.length = segmentCount;
+      segmentUsed.fill(false);
+      let loopCount = 0;
 
-      const unused = new Set<number>();
-      for (let i = 0; i < segments.length; i++) unused.add(i);
-
-      const loops: Point[][] = [];
-
-      while (unused.size > 0) {
-        const [startIndex] = unused;
-        unused.delete(startIndex);
-        const seg = segments[startIndex];
-
-        const loop: Point[] = [seg.a, seg.b];
+      for (let startIndex = 0; startIndex < segmentCount; startIndex++) {
+        if (segmentUsed[startIndex]) continue;
+        segmentUsed[startIndex] = true;
+        const segBase = startIndex << 2;
+        const loop = loopsBuffer[loopCount] ?? [];
+        loop.length = 0;
+        loop.push(
+          segmentsBuffer[segBase],
+          segmentsBuffer[segBase + 1],
+          segmentsBuffer[segBase + 2],
+          segmentsBuffer[segBase + 3]
+        );
 
         let extended = true;
         while (extended) {
           extended = false;
-          const end = loop[loop.length - 1];
-          const endKey = keyForPoint(end);
+          const endX = loop[loop.length - 2];
+          const endY = loop[loop.length - 1];
 
-          for (const idx of Array.from(unused)) {
-            const s = segments[idx];
-            const kA = keyForPoint(s.a);
-            const kB = keyForPoint(s.b);
-            if (kA === endKey) {
-              loop.push(s.b);
-              unused.delete(idx);
+          for (let idx = 0; idx < segmentCount; idx++) {
+            if (segmentUsed[idx]) continue;
+            const base = idx << 2;
+            const ax = segmentsBuffer[base];
+            const ay = segmentsBuffer[base + 1];
+            const bx = segmentsBuffer[base + 2];
+            const by = segmentsBuffer[base + 3];
+            if (pointsNearXY(ax, ay, endX, endY, EPS)) {
+              loop.push(bx, by);
+              segmentUsed[idx] = true;
               extended = true;
               break;
-            } else if (kB === endKey) {
-              loop.push(s.a);
-              unused.delete(idx);
+            } else if (pointsNearXY(bx, by, endX, endY, EPS)) {
+              loop.push(ax, ay);
+              segmentUsed[idx] = true;
               extended = true;
               break;
             }
@@ -524,35 +624,46 @@ export const MarchingSquaresExample: React.FC = () => {
         }
 
         // Close loop if end is near start.
-        const first = loop[0];
-        const last = loop[loop.length - 1];
-        const dx = last.x - first.x;
-        const dy = last.y - first.y;
+        const firstX = loop[0];
+        const firstY = loop[1];
+        const lastX = loop[loop.length - 2];
+        const lastY = loop[loop.length - 1];
+        const dx = lastX - firstX;
+        const dy = lastY - firstY;
         if (dx * dx + dy * dy < EPS * EPS) {
-          loop[loop.length - 1] = first;
+          loop[loop.length - 2] = firstX;
+          loop[loop.length - 1] = firstY;
         }
 
-        loops.push(loop);
+        loopsBuffer[loopCount] = loop;
+        loopCount++;
       }
+      loopsBuffer.length = loopCount;
 
       // Fill and stroke each loop using a blue→green gradient.
-      const gradient = ctx.createLinearGradient(0, 0, width, height);
-      gradient.addColorStop(0, "#1e3a8a"); // blue
-      gradient.addColorStop(1, "#22c55e"); // green
       ctx.fillStyle = gradient;
       ctx.strokeStyle = "#111827";
       ctx.lineWidth = 1.5;
 
-      for (const loop of loops) {
-        if (loop.length < 2) continue;
+      for (const loop of loopsBuffer) {
+        if (loop.length < 4) continue;
         ctx.beginPath();
-        ctx.moveTo(loop[0].x, loop[0].y);
-        for (let i = 1; i < loop.length; i++) {
-          ctx.lineTo(loop[i].x, loop[i].y);
+        ctx.moveTo(loop[0], loop[1]);
+        for (let i = 2; i < loop.length; i += 2) {
+          ctx.lineTo(loop[i], loop[i + 1]);
         }
         ctx.closePath();
         ctx.fill();
-        // ctx.stroke();
+      }
+
+      if (debug === true) {
+        for (const p of particles) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, debugParticleRadius, 0, 2 * Math.PI);
+          ctx.strokeStyle = "blue";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
       }
 
       animationFrameIdRef.current = requestAnimationFrame(frame);
